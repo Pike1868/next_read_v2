@@ -1,8 +1,8 @@
 from flask import Flask
 from .models import db, connect_db, bcrypt
 from .config import Config, Testing
-from .routes.users import users_bp as users
-from .routes.books import books_bp as books
+# from .routes.users import users_bp as users
+# from .routes.books import books_bp as books
 from flask_migrate import Migrate
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
@@ -33,9 +33,9 @@ def create_app(config_name="Config"):
     bcrypt.init_app(app)
     jwt.init_app(app)
     
-    migrate = Migrate(app.db)
+    migrate = Migrate(app, db)
     
-    app.register_blueprint(users)
-    app.register_blueprint(books)
+    # app.register_blueprint(users)
+    # app.register_blueprint(books)
     
     return app
