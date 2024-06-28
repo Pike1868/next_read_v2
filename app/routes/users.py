@@ -4,7 +4,7 @@ from sqlalchemy.exc import IntegrityError
 from ..models import User, db
 from datetime import datetime
 
-users_bp = Blueprint('users_bp', __name__, url_prefix='/users')
+users_bp = Blueprint('users_bp', __name__)
 
 TOP_GENRES = ["Romance", "Dystopian", "Mystery", "Fantasy", "Science Fiction", "Thriller"]
 
