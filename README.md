@@ -1,7 +1,4 @@
-# README
-
-## Next Read Version 2!
-
+# README: Next Read Version 2!
 
 ## Getting Started
 
@@ -16,7 +13,7 @@
 
     ```bash
     git clone https://github.com/pike1868/next_read_v2.git
-    cd next_read_book_tracker_v2
+    cd next_read_v2
     ```
 
 2. Create and activate a virtual environment:
