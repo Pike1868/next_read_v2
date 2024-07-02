@@ -39,4 +39,9 @@ def create_app(config_name="Config"):
     app.register_blueprint(users, url_prefix='/api/users')
     app.register_blueprint(books, url_prefix='/api/books')
     
+    #Simple route for index page
+    @app.route("/")
+    def index():
+        return "NextRead-v2 backend running...."
+    
     return app
