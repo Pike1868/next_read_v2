@@ -16,19 +16,28 @@ def search_google_books():
         response = requests.get(
             f"https://www.googleapis.com/books/v1/volumes?q={query}&key={os.environ.get('API_KEY')}&startIndex={startIndex}&printType=books&maxResults=40"
         )
+        
         data = response.json()
 
         if "items" in data:
             for item in data["items"]:
                 book_info = item["volumeInfo"]
+                sale_info = item.get("saleInfo", {})
+                retail_price = sale_info.get("retailPrice", {})
                 books.append({
                     "google_books_id": item["id"],
                     "title": book_info.get("title", "Unknown Title"),
                     "authors": book_info.get("authors", ["Unknown Author"]),
                     "thumbnail_url": book_info.get("imageLinks", {}).get("thumbnail", ""),
+                    "published_date": book_info.get("publishedDate", "Date not available"),
+                    "page_count": book_info.get("pageCount", "Page count not available"),
+                    "categories": book_info.get("categories", ["No categories available"]),
+                    "retail_price": retail_price.get("amount", "Price not available"),
+                    "currency_code": retail_price.get("currencyCode", ""),
                 })
 
     return jsonify(books=books, query=query, startIndex=startIndex)
+
 
 @books_bp.route('/search_genre/<genre>', methods=["GET"])
 def search_genre(genre):
