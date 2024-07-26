@@ -51,11 +51,18 @@ def search_genre(genre):
     if "items" in data:
         for item in data["items"]:
             book_info = item["volumeInfo"]
+            sale_info = item.get("saleInfo", {})
+            retail_price = sale_info.get("retailPrice", {})
             genre_books.append({
                 "google_books_id": item["id"],
                 "title": book_info.get("title", "Unknown Title"),
                 "authors": book_info.get("authors", ["Unknown Author"]),
                 "thumbnail_url": book_info.get("imageLinks", {}).get("thumbnail", ""),
+                "published_date": book_info.get("publishedDate", "Date not available"),
+                "page_count": book_info.get("pageCount", "Page count not available"),
+                "categories": book_info.get("categories", ["No categories available"]),
+                "retail_price": retail_price.get("amount", "Price not available"),
+                "currency_code": retail_price.get("currencyCode", ""),
             })
 
     return jsonify(books=genre_books, query=genre, startIndex=startIndex)
