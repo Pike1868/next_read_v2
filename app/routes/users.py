@@ -18,9 +18,11 @@ def sign_up():
     if not username or not email or not password:
         return jsonify({"msg": "Missing username, email, or password"}), 400
 
-    user = User.query.filter_by(email=email).first()
-    if user:
-        return jsonify({"msg": "Email already registered"}), 400
+    # Check if either the email or username already exists
+    existing_user = User.query.filter((User.email == email) | (User.username == username)).first()
+    
+    if existing_user:
+        return jsonify({"msg": "Email or Username already registered, try using a different one."}), 400
 
     new_user = User(
         username=username,
