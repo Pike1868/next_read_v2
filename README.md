@@ -43,16 +43,16 @@
 
 #### User Authentication
 
--   **Sign Up:** `@users_bp.route('/sign_up', methods=["GET", "POST"])`
--   **Sign In:** `@users_bp.route('/sign_in', methods=["GET", "POST"])`
+-   **Sign Up:** `@users_bp.route('/sign-up', methods=["GET", "POST"])`
+-   **Sign In:** `@users_bp.route('/sign-in', methods=["GET", "POST"])`
 -   **Edit Profile:** `@users_bp.route("/profile/edit", methods=["GET", "POST"])`
--   **Sign Out:** `@users_bp.route("/sign_out", methods=["POST"])`
+-   **Sign Out:** `@users_bp.route("/sign-out", methods=["POST"])`
 -   **Delete User:** `@users_bp.route("/delete", methods=["POST"])`
 
 #### Book Management
 
 -   **Search Books (Google API):** `@books_bp.route('/search', methods=['POST'])`
--   **Genre-based Search:** `@books_bp.route('/search_genre/<genre>', methods=["GET", "POST"])`
+-   **Genre-based Search:** `@books_bp.route('/search-genre/<genre>', methods=["GET", "POST"])`
 -   **Book Details:** `@books_bp.route('/detail/<volume_id>')`
 -   **Save Book:** `@books_bp.route('/save-book', methods=['POST'])`
 -   **Remove Book:** `@books_bp.route('/<volume_id>/remove', methods=["POST"])`

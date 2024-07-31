@@ -39,7 +39,7 @@ def search_google_books():
     return jsonify(books=books, query=query, startIndex=startIndex)
 
 
-@books_bp.route('/search_genre/<genre>', methods=["GET"])
+@books_bp.route('/search-genre/<genre>', methods=["GET"])
 def search_genre(genre):
     startIndex = request.args.get('startIndex', 0, type=int)
     genre_books = []

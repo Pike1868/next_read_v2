@@ -8,7 +8,7 @@ users_bp = Blueprint('users_bp', __name__)
 
 TOP_GENRES = ["Romance", "Dystopian", "Mystery", "Fantasy", "Science Fiction", "Thriller"]
 
-@users_bp.route('/signup', methods=['POST'])
+@users_bp.route('/sign-up', methods=['POST'])
 def sign_up():
     data = request.get_json()
     username = data.get('username')
@@ -34,7 +34,7 @@ def sign_up():
 
     return jsonify(access_token=access_token), 201
 
-@users_bp.route('/sign_in', methods=['POST'])
+@users_bp.route('/sign-in', methods=['POST'])
 def sign_in():
     data = request.get_json()
     email = data.get('email')
@@ -84,7 +84,7 @@ def edit_user_profile():
     else:
         return jsonify({"msg": "Incorrect password"}), 401
 
-@users_bp.route("/sign_out", methods=["POST"])
+@users_bp.route("/sign-out", methods=["POST"])
 @jwt_required()
 def sign_out():
     return jsonify({"msg": "Successfully signed out"}), 200
