@@ -32,7 +32,7 @@ def sign_up():
 
     access_token = create_access_token(identity=new_user.id)
 
-    return jsonify(access_token=access_token), 201
+    return jsonify(token=access_token), 201
 
 @users_bp.route('/sign-in', methods=['POST'])
 def sign_in():
@@ -44,7 +44,7 @@ def sign_in():
 
     if user and user.check_password(password):
         access_token = create_access_token(identity=user.id)
-        return jsonify(access_token=access_token, username=user.username), 200
+        return jsonify(token=access_token, username=user.username), 200
 
     return jsonify({"msg": "Invalid credentials"}), 401
 
