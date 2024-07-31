@@ -25,7 +25,7 @@ def sign_up():
     new_user = User(
         username=username,
         email=email,
-        password=User.hash_password(password)
+        password=password
     )
     db.session.add(new_user)
     db.session.commit()
@@ -39,14 +39,16 @@ def sign_in():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
+    print(f"Received sign-in request with username: {email}, password: {password}")
 
     user = User.query.filter_by(email=email).first()
 
     if user and user.check_password(password):
         access_token = create_access_token(identity=user.id)
-        return jsonify(access_token=access_token), 200
+        return jsonify(access_token=access_token, username=user.username), 200
 
     return jsonify({"msg": "Invalid credentials"}), 401
+
 
 @users_bp.route("/profile", methods=["GET"])
 @jwt_required()
