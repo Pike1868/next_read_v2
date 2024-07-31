@@ -39,7 +39,6 @@ def sign_in():
     data = request.get_json()
     email = data.get('email')
     password = data.get('password')
-    print(f"Received sign-in request with username: {email}, password: {password}")
 
     user = User.query.filter_by(email=email).first()
 
