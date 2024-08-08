@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import create_access_token, jwt_required, get_jwt_identity
 from sqlalchemy.exc import IntegrityError
 from ..models import User, db
+from ..middleware.auth_middleware import token_required 
 from datetime import datetime
 
 users_bp = Blueprint('users_bp', __name__)
@@ -59,10 +60,11 @@ def user_profile():
     if not user:
         return jsonify({"msg": "User not found"}), 404
 
-    return jsonify(username=user.username, email=user.email, bio=user.bio, location=user.location, image_url=user.image_url), 200
+    return jsonify(username=user.username, email=user.email, bio=user.bio, location=user.location, image_url=user.image_url, creation_date=user.creation_date), 200
 
 @users_bp.route("/profile/edit", methods=["POST"])
 @jwt_required()
+@token_required
 def edit_user_profile():
     current_user_id = get_jwt_identity()
     user = User.query.get(current_user_id)
@@ -93,6 +95,7 @@ def sign_out():
 
 @users_bp.route("/delete", methods=["POST"])
 @jwt_required()
+@token_required
 def delete_user_account():
     current_user_id = get_jwt_identity()
     user = User.query.get_or_404(current_user_id)
