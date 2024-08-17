@@ -10,7 +10,7 @@ def token_required(f):
             verify_jwt_in_request()
             claims = get_jwt()
             exp_timestamp = claims['exp']
-            current_timestamp = datetime.datetime.timestamp(datetime.datetime.utcnow())
+            current_timestamp = datetime.datetime.now(datetime.timezone.utc).timestamp()
             
             if current_timestamp > exp_timestamp:
                 return jsonify({"msg": "Session expired, Please sign in again."}), 401
@@ -20,3 +20,4 @@ def token_required(f):
 
         return f(*args, **kwargs)
     return decorated_function
+
