@@ -146,3 +146,28 @@ def remove_user_book(volume_id):
         return jsonify({"msg": "Book removed successfully"}), 200
     else:
         return jsonify({"msg": "Book not found in your lists"}), 404
+
+@books_bp.route('/user-books', methods=['GET'])
+@jwt_required()
+def get_user_books():
+    user_id = get_jwt_identity()
+
+    # Fetch UserBooks based on their status
+    user_books = UserBooks.query.filter_by(user_id=user_id).all()
+
+    # Organize the books by status
+    currently_reading = [ub.book.to_dict() for ub in user_books if ub.status == 'currently_reading']
+    previously_read = [ub.book.to_dict() for ub in user_books if ub.status == 'previously_read']
+    want_to_read = [ub.book.to_dict() for ub in user_books if ub.status == 'want_to_read']
+
+    # Debugging: Print serialized data
+    print("Currently Reading:", currently_reading)
+    print("Previously Read:", previously_read)
+    print("Want to Read:", want_to_read)
+
+    # Return the books as JSON
+    return jsonify({
+        'currently_reading': currently_reading,
+        'previously_read': previously_read,
+        'want_to_read': want_to_read,
+    })

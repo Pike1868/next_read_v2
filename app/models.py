@@ -70,6 +70,20 @@ class Book(db.Model):
 
     users = db.relationship('UserBooks', backref='book', cascade='all, delete')
 
+    def to_dict(self):
+        """Serialize book instance to dictionary."""
+        return {
+            'google_books_id': self.google_books_id,
+            'title': self.title,
+            'authors': self.authors.split(', ') if self.authors else [],
+            'thumbnail_url': self.thumbnail_url,
+            'description': self.description,
+            'published_date': self.published_date,
+            'average_rating': self.average_rating,
+            'ratings_count': self.ratings_count,
+            'page_count': self.page_count,
+        }
+
 
 class UserBooks(db.Model):
     """UserBooks table..."""
