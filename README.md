@@ -12,33 +12,86 @@
 -   Python 3.x
 -   pip
 
-### Installation
+# Installation Instructions
 
-1. Clone the repository:
+#### 1. Clone the repository:
 
-    ```bash
-    git clone https://github.com/pike1868/next_read_v2.git
-    cd next_read_v2
-    ```
+```bash
+git clone https://github.com/pike1868/next_read_v2.git
+cd next_read_v2
+```
 
-2. Create and activate a virtual environment:
+#### 2. Install PostgreSQL:
+Ensure that **PostgreSQL** is installed on your system. You can follow the installation instructions for **PostgreSQL** based on your operating system.
 
-    ```bash
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
-    ```
+- **Linux (Ubuntu)**: Install **PostgreSQL** using:
 
-3. Install dependencies:
+```bash
+sudo apt update
+sudo apt install postgresql postgresql-contrib
+```
 
-    ```bash
-    pip install -r requirements.txt
-    ```
+- **Windows**: Download and install **PostgreSQL** from [the official website](https://www.postgresql.org/download/windows/).
 
-4. Run the application:
+After installation, verify **psql** is accessible by running:
 
-    ```bash
-    python run.py
-    ```
+```bash
+psql --version
+```
+
+#### 3. Create and activate a virtual environment:
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+```
+
+#### 4. Install dependencies:
+
+```bash
+pip install -r requirements.txt
+```
+
+#### 5. Set up the `.env` file:
+
+In the root directory of your project, create a `.env` file and populate it with the following keys (replace the placeholder values with your actual configuration):
+
+```env
+SECRET_KEY="your_secret_key_here"
+DEBUG=True
+APP_SETTINGS=config.Config
+DATABASE_URI="postgresql://your_username:your_password@localhost:5432/your_database_name"
+FLASK_APP=app.__init__:create_app
+FLASK_DEBUG=1
+TEST_DATABASE_URI="postgresql://your_username:your_password@localhost:5432/your_test_database"
+API_KEY="your_api_key_here"
+```
+
+- **`DATABASE_URI`**: This should be the **PostgreSQL connection string**. Replace `your_username`, `your_password`, and `your_database_name` with your actual database details.
+- **`API_KEY`**: If your app interacts with an external API, make sure to provide your actual API key here.
+
+#### 6. Run the application:
+
+```bash
+python run.py
+```
+
+This will start your **Flask** application. You should now be able to access it at `http://127.0.0.1:5000/` in your browser.
+
+---
+
+#### Additional Notes:
+- Make sure **PostgreSQL** is running and accepting connections on `localhost:5432`. If you’re using a **custom port** or **remote PostgreSQL server**, adjust the `DATABASE_URI` accordingly.
+
+- If you're using **Windows** and **WSL** for the development environment, ensure that your PostgreSQL is set up to accept connections from WSL, and use the correct IP/hostname.
+
+- You can create the PostgreSQL database with the following SQL commands:
+
+```sql
+CREATE DATABASE your_database_name;
+CREATE DATABASE your_test_database;
+```
+
 ### Endpoints
 
 #### User Authentication

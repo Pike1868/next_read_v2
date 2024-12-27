@@ -83,3 +83,4 @@ dmypy.json
 
 # VS Code
 .vscode/
+*.sql

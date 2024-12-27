@@ -86,6 +86,16 @@ def save_book():
     google_books_id = data.get('google_books_id')
     status = data.get('status')
 
+    # Normalize status
+    if status:
+        status = status.lower().replace(" ", "_")
+
+    # Validate status
+    allowed_statuses = {'currently_reading', 'want_to_read', 'previously_read'}
+    if status not in allowed_statuses:
+        return jsonify({"msg": "Invalid status provided."}), 400
+
+    # Proceed with saving the book status
     book = Book.query.filter_by(google_books_id=google_books_id).first()
 
     if not book:
@@ -154,6 +164,8 @@ def get_user_books():
 
     # Fetch UserBooks based on their status
     user_books = UserBooks.query.filter_by(user_id=user_id).all()
+    
+    print("================+++++++>",user_books)
 
     # Organize the books by status
     currently_reading = [ub.book.to_dict() for ub in user_books if ub.status == 'currently_reading']
