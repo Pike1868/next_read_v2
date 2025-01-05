@@ -56,7 +56,6 @@ def create_app(config_name="Config"):
     #Simple route for index page
     @app.route("/")
     def index():
-        1/0  # raises an error
         return "NextRead-v2 backend running...."
     
     return app
