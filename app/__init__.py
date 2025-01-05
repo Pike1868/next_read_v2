@@ -7,6 +7,8 @@ from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
+import sentry_sdk
+from sentry_sdk.integrations.flask import FlaskIntegration
 import os
 
 # Load environment variables from a .env file
@@ -18,6 +20,8 @@ def create_app(config_name="Config"):
     """Flask Application factory function: Creates flask app context, initializes
     extensions using the app instance, registers blueprints, and returns the app"""
     
+    
+    
     app = Flask(__name__)
     
     # Dynamically select the configuration class based on the 'config_name' argument
@@ -27,6 +31,16 @@ def create_app(config_name="Config"):
         app.config.from_object(Testing)
     else:
         raise ValueError("Invalid configuration name")
+    
+     # Initialize Sentry inside the app context
+    sentry_sdk.init(
+        dsn=os.environ.get("SENTRY_DSN", ""),
+        integrations=[FlaskIntegration()],
+        traces_sample_rate=1.0,
+        _experiments={
+            "continuous_profiling_auto_start": True,
+        },
+    )
     
     connect_db(app)
     db.init_app(app)
@@ -42,6 +56,7 @@ def create_app(config_name="Config"):
     #Simple route for index page
     @app.route("/")
     def index():
+        1/0  # raises an error
         return "NextRead-v2 backend running...."
     
     return app

@@ -86,13 +86,65 @@ class Book(db.Model):
 
 
 class UserBooks(db.Model):
-    """UserBooks table..."""
-
+    """Link table for Users <-> Books with status and reading progress."""
+    
     __tablename__ = 'user_books'
 
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
-    user_id = db.Column(db.Integer, db.ForeignKey(
-        "users.id", ondelete='cascade'))
-    book_id = db.Column(db.Integer, db.ForeignKey(
-        "books.id", ondelete='cascade'))
+    user_id = db.Column(db.Integer, db.ForeignKey("users.id", ondelete='cascade'))
+    book_id = db.Column(db.Integer, db.ForeignKey("books.id", ondelete='cascade'))
     status = db.Column(db.String(50), nullable=False)
+
+    # new columns for reading progress
+    start_date = db.Column(db.Date, nullable=True)
+    end_date = db.Column(db.Date, nullable=True)
+    current_page = db.Column(db.Integer, nullable=True)
+
+    def __repr__(self):
+        return (f"<UserBooks id={self.id} user_id={self.user_id} "
+                f"book_id={self.book_id} status={self.status} "
+                f"start_date={self.start_date} end_date={self.end_date} "
+                f"current_page={self.current_page}>")
+
+
+class BookRanking(db.Model):
+    """
+    A table to store ranks from various lists/services.
+
+    example:
+      - list_name = 'NYT'   with rank=1
+      - list_name = 'GOOGLE'  with rank=3
+    """
+    __tablename__ = "book_rankings"
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    book_id = db.Column(db.Integer, db.ForeignKey('books.id', ondelete='CASCADE'))
+
+    # e.g. 'nyt', 'google', 'usa_today', 'bookbub', etc.
+    list_name = db.Column(db.String(100), nullable=False)
+
+    # The numeric position in that list
+    rank = db.Column(db.Integer)
+
+    # Date or version when this rank was valid
+    bestsellers_date = db.Column(db.Date, nullable=True)
+    updated_at = db.Column(db.DateTime, default=datetime.now, nullable=False)
+
+    # relationship back to Book
+    book = db.relationship("Book", backref="book_rankings")
+
+    def __repr__(self):
+        return f"<BookRanking book_id={self.book_id} list_name={self.list_name} rank={self.rank}>"
+
+class FeaturedMeta(db.Model):
+    """
+    Tracks the last time we fetched bestsellers data from NYT
+    (so we can skip refetching if it’s less than 24h old, for instance).
+    """
+    __tablename__ = 'featured_meta'
+
+    id = db.Column(db.Integer, primary_key=True, autoincrement=True)
+    last_updated = db.Column(db.DateTime, nullable=True)
+
+    def __repr__(self):
+        return f"<FeaturedMeta id={self.id} last_updated={self.last_updated}>"
