@@ -85,14 +85,56 @@ def search_genre(genre):
 
 @books_bp.route('/detail/<volume_id>', methods=['GET'])
 def detail(volume_id):
-    response = requests.get(
-        f"https://www.googleapis.com/books/v1/volumes/{volume_id}?key={os.environ.get('API_KEY')}"
-    )
-    data = response.json()
+    """Fetch detailed information about a book from Google Books API."""
+    try:
+        # If the volume_id starts with 'isbn_', treat it as an ISBN
+        if volume_id.startswith("isbn_"):
+            isbn = volume_id.replace("isbn_", "")
+            # Search for the book by ISBN
+            search_response = requests.get(
+                f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&key={os.environ.get('API_KEY')}"
+            )
+            search_data = search_response.json()
 
-    book_detail = data["volumeInfo"]
+            if "items" not in search_data:
+                return jsonify({"error": "Book details not found"}), 404
 
-    return jsonify(book=book_detail, google_books_id=volume_id)
+            # Extract the correct volumeId
+            volume_id = search_data["items"][0]["id"]
+
+        # Now make a request to get detailed book information
+        response = requests.get(
+            f"https://www.googleapis.com/books/v1/volumes/{volume_id}?key={os.environ.get('API_KEY')}"
+        )
+        data = response.json()
+
+        if "volumeInfo" not in data:
+            return jsonify({"error": "Book details not found"}), 404
+
+        book_detail = data.get("volumeInfo", {})
+        sale_info = data.get("saleInfo", {})
+
+        result = {
+            "title": book_detail.get("title", "Unknown Title"),
+            "authors": book_detail.get("authors", ["Unknown Author"]),
+            "description": book_detail.get("description", "Description not available"),
+            "publishedDate": book_detail.get("publishedDate", "Date not available"),
+            "pageCount": book_detail.get("pageCount", 0),
+            "categories": book_detail.get("categories", ["No categories available"]),
+            "imageLinks": book_detail.get("imageLinks", {}),
+            "publisher": book_detail.get("publisher", "Publisher not available"),
+            "retailPrice": sale_info.get("retailPrice", {}).get("amount"),
+            "currencyCode": sale_info.get("retailPrice", {}).get("currencyCode"),
+        }
+
+        return jsonify({"book": result}), 200
+
+    except requests.exceptions.RequestException as e:
+        # Capture the exception in Sentry
+        sentry_sdk.capture_exception(e)
+        return jsonify({"error": "Failed to fetch book details"}), 500
+
+
 
 @books_bp.route('/save-book', methods=['POST'])
 @jwt_required()
@@ -232,17 +274,21 @@ def get_featured_books():
 
     for list_obj in all_lists:
         list_name = list_obj.get("list_name")
-        books = [
-            {
-                "rank": book.get("rank"),
-                "title": book.get("title"),
-                "author": book.get("author"),
-                "book_image": book.get("book_image"),
-                "google_books_id": f'isbn_{book.get("primary_isbn13")}',
-            }
-            for book in list_obj.get("books", [])
-        ]
+        books = sorted(
+            [
+                {
+                    "rank": book.get("rank"),
+                    "title": book.get("title"),
+                    "author": book.get("author"),
+                    "book_image": book.get("book_image"),
+                    "google_books_id": f'isbn_{book.get("primary_isbn13")}',
+                }
+                for book in list_obj.get("books", [])
+            ],
+            key=lambda x: x["rank"] or float("inf")  # Sort by rank, handle missing ranks gracefully
+        )
         featured_lists.append({"list_name": list_name, "books": books})
+
 
     # Update FeaturedMeta
     if not meta:
