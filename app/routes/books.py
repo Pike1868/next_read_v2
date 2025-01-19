@@ -3,16 +3,14 @@ import time
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import Book, UserBooks, BookRanking, FeaturedMeta, db
-from .book_helpers import fetch_google_books_by_isbn, build_featured_lists_from_db  # Import helpers
+from .book_helpers import cache_results, fetch_google_books_by_isbn, build_featured_lists_from_db, hydrate_nyt_books
 from collections import defaultdict
 import requests
 import os
 
 books_bp = Blueprint('books_bp', __name__)
 
-CACHE = {}
-CACHE_EXPIRY = 3600  # 1 hour cache expiry
-
+@cache_results()
 @books_bp.route('/search', methods=['GET'])
 def search_google_books():
     startIndex = request.args.get('startIndex', 0, type=int)
@@ -87,42 +85,38 @@ def search_genre(genre):
 def detail(volume_id):
     """Fetch detailed information about a book from Google Books API."""
     try:
-        # If the volume_id starts with 'isbn_', treat it as an ISBN
         if volume_id.startswith("isbn_"):
             isbn = volume_id.replace("isbn_", "")
-            # Search for the book by ISBN
-            search_response = requests.get(
-                f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&key={os.environ.get('API_KEY')}"
-            )
-            search_data = search_response.json()
-
-            if "items" not in search_data:
+            # Use the helper function to fetch by ISBN
+            book_data = fetch_google_books_by_isbn(isbn)
+            if not book_data:
                 return jsonify({"error": "Book details not found"}), 404
 
-            # Extract the correct volumeId
-            volume_id = search_data["items"][0]["id"]
+            return jsonify({"book": book_data}), 200
 
-        # Now make a request to get detailed book information
+        # For non-ISBN volume IDs, fetch directly
         response = requests.get(
             f"https://www.googleapis.com/books/v1/volumes/{volume_id}?key={os.environ.get('API_KEY')}"
         )
+        response.raise_for_status()
         data = response.json()
 
         if "volumeInfo" not in data:
             return jsonify({"error": "Book details not found"}), 404
 
-        book_detail = data.get("volumeInfo", {})
+        volume_info = data["volumeInfo"]
         sale_info = data.get("saleInfo", {})
 
         result = {
-            "title": book_detail.get("title", "Unknown Title"),
-            "authors": book_detail.get("authors", ["Unknown Author"]),
-            "description": book_detail.get("description", "Description not available"),
-            "publishedDate": book_detail.get("publishedDate", "Date not available"),
-            "pageCount": book_detail.get("pageCount", 0),
-            "categories": book_detail.get("categories", ["No categories available"]),
-            "imageLinks": book_detail.get("imageLinks", {}),
-            "publisher": book_detail.get("publisher", "Publisher not available"),
+            "google_books_id": volume_id,
+            "title": volume_info.get("title", "Unknown Title"),
+            "authors": volume_info.get("authors", ["Unknown Author"]),
+            "description": volume_info.get("description", "Description not available"),
+            "publishedDate": volume_info.get("publishedDate", "Date not available"),
+            "pageCount": volume_info.get("pageCount", 0),
+            "categories": volume_info.get("categories", ["No categories available"]),
+            "imageLinks": volume_info.get("imageLinks", {}),
+            "publisher": volume_info.get("publisher", "Publisher not available"),
             "retailPrice": sale_info.get("retailPrice", {}).get("amount"),
             "currencyCode": sale_info.get("retailPrice", {}).get("currencyCode"),
         }
@@ -130,9 +124,9 @@ def detail(volume_id):
         return jsonify({"book": result}), 200
 
     except requests.exceptions.RequestException as e:
-        # Capture the exception in Sentry
         sentry_sdk.capture_exception(e)
         return jsonify({"error": "Failed to fetch book details"}), 500
+
 
 
 
@@ -264,8 +258,9 @@ def get_featured_books():
     nytimes_url = f"https://api.nytimes.com/svc/books/v3/lists/full-overview.json?api-key={nyt_api_key}"
     try:
         response = requests.get(nytimes_url)
+        response.raise_for_status()  # Raise exception for HTTP errors
         data = response.json()
-    except Exception as e:
+    except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Failed to fetch NYTimes data: {str(e)}"}), 500
 
     results = data.get("results", {})
@@ -287,8 +282,11 @@ def get_featured_books():
             ],
             key=lambda x: x["rank"] or float("inf")  # Sort by rank, handle missing ranks gracefully
         )
-        featured_lists.append({"list_name": list_name, "books": books})
 
+        # Enrich the books with Google Books data
+        books = hydrate_nyt_books(books)
+
+        featured_lists.append({"list_name": list_name, "books": books})
 
     # Update FeaturedMeta
     if not meta:

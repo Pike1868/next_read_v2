@@ -84,3 +84,7 @@ dmypy.json
 # VS Code
 .vscode/
 *.sql
+
+# Ignore log files
+app.log
+*.log

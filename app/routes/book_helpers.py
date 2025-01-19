@@ -2,6 +2,30 @@ import requests
 import os
 from collections import defaultdict
 from ..models import Book, BookRanking, db
+from functools import wraps
+
+def cache_results(expiry=None):
+    """
+    Decorator to cache function results for a specified duration.
+    """
+    if expiry is None:
+        expiry = 3600  # Default expiry if not provided
+
+    def decorator(func):
+        @wraps(func)
+        def wrapper(*args, **kwargs):
+            cache_key = f"{func.__name__}_{args}_{kwargs}"
+            if cache_key in CACHE:
+                cached_result, timestamp = CACHE[cache_key]
+                if time.time() - timestamp < expiry:
+                    print("Serving from cache:", func.__name__)
+                    return cached_result
+            result = func(*args, **kwargs)
+            CACHE[cache_key] = (result, time.time())
+            return result
+        return wrapper
+    return decorator
+
 
 def fetch_google_books_by_isbn(isbn13):
     """
@@ -67,3 +91,18 @@ def build_featured_lists_from_db():
         {"list_name": list_name, "display_name": list_name, "books": books}
         for list_name, books in lists_dict.items()
     ]
+
+def hydrate_nyt_books(books):
+    """
+    Enrich NYT books with additional data from Google Books using their google_books_id.
+    """
+    hydrated_books = []
+    for book in books:
+        google_books_id = book.get("google_books_id")
+        if google_books_id and google_books_id.startswith("isbn_"):
+            isbn = google_books_id.replace("isbn_", "")
+            book_data = fetch_google_books_by_isbn(isbn)
+            if book_data:
+                book.update(book_data)  # Enrich with Google Books data
+        hydrated_books.append(book)
+    return hydrated_books
