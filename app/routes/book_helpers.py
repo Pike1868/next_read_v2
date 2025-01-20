@@ -1,8 +1,16 @@
 import requests
 import os
+import time
 from collections import defaultdict
 from ..models import Book, BookRanking, db
 from functools import wraps
+
+# Caching API Responses
+CACHE = {}
+CACHE_EXPIRY = 60 * 60 * 24  # 24 hours
+
+# Throttling for API Requests
+REQUEST_INTERVAL = 0.1  # 100ms between requests
 
 def cache_results(expiry=None):
     """
@@ -71,6 +79,7 @@ def build_featured_lists_from_db():
     all_rankings = (
         db.session.query(BookRanking)
         .join(Book, BookRanking.book_id == Book.id)
+        .order_by(BookRanking.list_name, BookRanking.rank)  # Order by list name and rank
         .all()
     )
 
@@ -92,17 +101,69 @@ def build_featured_lists_from_db():
         for list_name, books in lists_dict.items()
     ]
 
-def hydrate_nyt_books(books):
+
+
+def throttle_api_request(api_call, *args, **kwargs):
+    """Throttle API requests by introducing a delay."""
+    time.sleep(REQUEST_INTERVAL)  # Pause before making the request
+    return api_call(*args, **kwargs)
+
+
+def get_cached_book_data(google_books_id):
+    """Retrieve cached book data if it exists and is not expired."""
+    cached_book = CACHE.get(google_books_id)
+    if cached_book and time.time() - cached_book["timestamp"] < CACHE_EXPIRY:
+        return cached_book["data"]
+    return None
+
+def cache_book_data(google_books_id, data):
+    """Cache book data for a given Google Books ID."""
+    CACHE[google_books_id] = {"data": data, "timestamp": time.time()}
+
+
+def hydrate_nyt_books(book_data_list):
     """
-    Enrich NYT books with additional data from Google Books using their google_books_id.
+    Hydrate NYT books with data from the database or Google Books API.
     """
     hydrated_books = []
-    for book in books:
-        google_books_id = book.get("google_books_id")
-        if google_books_id and google_books_id.startswith("isbn_"):
-            isbn = google_books_id.replace("isbn_", "")
-            book_data = fetch_google_books_by_isbn(isbn)
-            if book_data:
-                book.update(book_data)  # Enrich with Google Books data
+    for book in book_data_list:
+        # Check if the book is already in the database
+        existing_book = Book.query.filter_by(google_books_id=book["google_books_id"]).first()
+        if existing_book:
+            book.update({
+                "title": existing_book.title,
+                "authors": existing_book.authors.split(", "),
+                "thumbnail_url": existing_book.thumbnail_url,
+                "description": existing_book.description,
+            })
+            
+            
+        else:
+            # Fetch data from the API
+            isbn = book["google_books_id"].replace("isbn_", "")
+            response = requests.get(
+                f"https://www.googleapis.com/books/v1/volumes?q=isbn:{isbn}&key={os.environ.get('API_KEY')}"
+            )
+            if response.status_code == 200:
+                data = response.json()
+                book_info = data.get("items", [{}])[0].get("volumeInfo", {})
+                book.update({
+                    "title": book_info.get("title", "Unknown Title"),
+                    "authors": book_info.get("authors", ["Unknown Author"]),
+                    "thumbnail_url": book_info.get("imageLinks", {}).get("thumbnail", ""),
+                    "description": book_info.get("description", "No description available."),
+                })
+                # Save the book to the database
+                new_book = Book(
+                    google_books_id=book["google_books_id"],
+                    title=book["title"],
+                    authors=", ".join(book["authors"]),
+                    thumbnail_url=book["thumbnail_url"],
+                    description=book["description"],
+                )
+                db.session.add(new_book)
+                db.session.commit()
         hydrated_books.append(book)
     return hydrated_books
+
+

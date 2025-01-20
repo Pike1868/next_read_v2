@@ -1,12 +1,14 @@
-from datetime import datetime, timedelta
+import datetime
 import time
+from datetime import timedelta
 from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from ..models import Book, UserBooks, BookRanking, FeaturedMeta, db
-from .book_helpers import cache_results, fetch_google_books_by_isbn, build_featured_lists_from_db, hydrate_nyt_books
-from collections import defaultdict
+from .book_helpers import CACHE, CACHE_EXPIRY, cache_results, fetch_google_books_by_isbn, build_featured_lists_from_db, hydrate_nyt_books
 import requests
 import os
+import sentry_sdk
+
 
 books_bp = Blueprint('books_bp', __name__)
 
@@ -35,6 +37,8 @@ def search_google_books():
         if "items" in data:
             for item in data["items"]:
                 book_info = item.get("volumeInfo", {})
+                sale_info = item.get("saleInfo", {})
+                retail_price = sale_info.get("listPrice", {})
                 books.append({
                     "google_books_id": item.get("id"),
                     "title": book_info.get("title", "Unknown Title"),
@@ -43,7 +47,10 @@ def search_google_books():
                     "published_date": book_info.get("publishedDate", "Date not available"),
                     "page_count": book_info.get("pageCount", "Page count not available"),
                     "categories": book_info.get("categories", ["No categories available"]),
+                    "retail_price": retail_price.get("amount", "Price not available"),
+                    "currency_code": retail_price.get("currencyCode", "USD"),
                 })
+
 
     # Cache the result
     CACHE[cache_key] = ({"books": books, "query": query, "startIndex": startIndex}, time.time())
@@ -121,6 +128,7 @@ def detail(volume_id):
             "currencyCode": sale_info.get("retailPrice", {}).get("currencyCode"),
         }
 
+
         return jsonify({"book": result}), 200
 
     except requests.exceptions.RequestException as e:
@@ -165,7 +173,11 @@ def save_book():
             average_rating=book_data.get("averageRating", None),
             ratings_count=book_data.get("ratingsCount", 0),
             page_count=book_data.get("pageCount"),
+            categories=", ".join(book_data.get("categories", ["No categories available"])),
+            retail_price=book_data.get("saleInfo", {}).get("listPrice", {}).get("amount", 0.0),
+            currency_code=book_data.get("saleInfo", {}).get("listPrice", {}).get("currencyCode", "USD"),
         )
+
 
         db.session.add(new_book)
         db.session.flush()
@@ -235,60 +247,91 @@ def get_user_books():
    
 @books_bp.route('/featured', methods=['GET'])
 def get_featured_books():
-    """Return the NYTimes best-seller lists."""
     nyt_api_key = os.environ.get('NYT_API_KEY', '')
     if not nyt_api_key:
         return jsonify({"error": "NYT_API_KEY not configured."}), 500
 
-    # Check if data is less than 24h old
+   # Check if data is less than 24 hours old
     meta = FeaturedMeta.query.first()
-    now = datetime.now()
+    now = datetime.datetime.now(datetime.timezone.utc)
     twenty_four_hours_ago = now - timedelta(hours=24)
 
-    if meta and meta.last_updated and meta.last_updated > twenty_four_hours_ago:
-        # Use cached data
-        featured_lists = build_featured_lists_from_db()
-        return jsonify({
-            "bestsellers_date": None,
-            "published_date": None,
-            "featured_lists": featured_lists
-        })
+    if meta and meta.last_updated:
+        # Ensure meta.last_updated is timezone-aware
+        if meta.last_updated.tzinfo is None:
+            meta.last_updated = meta.last_updated.replace(tzinfo=datetime.timezone.utc)
 
-    # Fetch fresh data from NYTimes
-    nytimes_url = f"https://api.nytimes.com/svc/books/v3/lists/full-overview.json?api-key={nyt_api_key}"
+        # Check if the data is still fresh
+        if meta.last_updated > twenty_four_hours_ago:
+            featured_lists = build_featured_lists_from_db()
+            return jsonify({
+                "bestsellers_date": None,
+                "published_date": None,
+                "featured_lists": featured_lists
+            })
+
+    # Fetch new data from NYTimes API
     try:
-        response = requests.get(nytimes_url)
-        response.raise_for_status()  # Raise exception for HTTP errors
+        response = requests.get(f"https://api.nytimes.com/svc/books/v3/lists/full-overview.json?api-key={nyt_api_key}")
+        response.raise_for_status()
         data = response.json()
     except requests.exceptions.RequestException as e:
         return jsonify({"error": f"Failed to fetch NYTimes data: {str(e)}"}), 500
 
+    # Process and save data to the database
     results = data.get("results", {})
-    all_lists = results.get("lists", [])
-    featured_lists = []
+    bestsellers_date = results.get("bestsellers_date")  # Extract the bestsellers date
 
-    for list_obj in all_lists:
+    for list_obj in results.get("lists", []):
         list_name = list_obj.get("list_name")
-        books = sorted(
-            [
-                {
-                    "rank": book.get("rank"),
-                    "title": book.get("title"),
-                    "author": book.get("author"),
-                    "book_image": book.get("book_image"),
-                    "google_books_id": f'isbn_{book.get("primary_isbn13")}',
-                }
-                for book in list_obj.get("books", [])
-            ],
-            key=lambda x: x["rank"] or float("inf")  # Sort by rank, handle missing ranks gracefully
-        )
+        books = hydrate_nyt_books([
+            {
+                "rank": book.get("rank"),
+                "title": book.get("title"),
+                "author": book.get("author"),
+                "book_image": book.get("book_image"),
+                "google_books_id": f"isbn_{book.get('primary_isbn13')}",
+                "categories": book.get("categories", []),
+                "retail_price": book.get("price", {}).get("amount", 0.0),
+                "currency_code": book.get("price", {}).get("currencyCode", "USD"),
+            } for book in list_obj.get("books", [])
+        ])
 
-        # Enrich the books with Google Books data
-        books = hydrate_nyt_books(books)
 
-        featured_lists.append({"list_name": list_name, "books": books})
+        # Save or update books and rankings
+        for book in books:
+            existing_book = Book.query.filter_by(google_books_id=book["google_books_id"]).first()
 
-    # Update FeaturedMeta
+            if not existing_book:
+                new_book = Book(
+                    google_books_id=book["google_books_id"],
+                    title=book["title"],
+                    authors=book["author"],
+                    thumbnail_url=book["book_image"],
+                    description=book.get("description", "No description available."),
+                )
+                db.session.add(new_book)
+                db.session.flush()  # Flush to get the new book ID
+                book_id = new_book.id
+            else:
+                book_id = existing_book.id
+
+            # Save or update the ranking for this book in BookRanking
+            ranking = BookRanking.query.filter_by(book_id=book_id, list_name=list_name).first()
+
+            if ranking:
+                ranking.rank = book["rank"]
+                ranking.bestsellers_date = bestsellers_date  # Update bestsellers_date
+            else:
+                ranking = BookRanking(
+                    book_id=book_id,
+                    list_name=list_name,
+                    rank=book["rank"],
+                    bestsellers_date=bestsellers_date,  # Set bestsellers_date
+                )
+                db.session.add(ranking)
+
+    # Update the last_updated timestamp in FeaturedMeta
     if not meta:
         meta = FeaturedMeta(last_updated=now)
         db.session.add(meta)
@@ -298,7 +341,7 @@ def get_featured_books():
     db.session.commit()
 
     return jsonify({
-        "bestsellers_date": results.get("bestsellers_date"),
+        "bestsellers_date": bestsellers_date,
         "published_date": results.get("published_date"),
-        "featured_lists": featured_lists
+        "featured_lists": build_featured_lists_from_db()  # Fetch updated data from the database
     })

@@ -1,6 +1,6 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_bcrypt import Bcrypt
-from datetime import datetime
+from datetime import datetime, timezone
 
 db = SQLAlchemy()
 bcrypt = Bcrypt()
@@ -60,13 +60,16 @@ class Book(db.Model):
     id = db.Column(db.Integer, primary_key=True, autoincrement=True)
     google_books_id = db.Column(db.Text, nullable=False, unique=True)
     title = db.Column(db.Text, nullable=False)
-    authors = db.Column(db.Text, nullable=False)
+    authors = db.Column(db.Text, nullable=False)  # Stored as a comma-separated string
     thumbnail_url = db.Column(db.Text, nullable=False)
     description = db.Column(db.Text)
     published_date = db.Column(db.Text)
     average_rating = db.Column(db.Float)
     ratings_count = db.Column(db.Integer)
     page_count = db.Column(db.Integer)
+    categories = db.Column(db.Text, nullable=True)  # Stored as a comma-separated string
+    retail_price = db.Column(db.Float, nullable=True, default=0.0)
+    currency_code = db.Column(db.String(3), nullable=True, default="USD")
 
     users = db.relationship('UserBooks', backref='book', cascade='all, delete')
 
@@ -82,7 +85,11 @@ class Book(db.Model):
             'average_rating': self.average_rating,
             'ratings_count': self.ratings_count,
             'page_count': self.page_count,
+            'categories': self.categories.split(', ') if self.categories else [],
+            'retail_price': self.retail_price,
+            'currency_code': self.currency_code,
         }
+
 
 
 class UserBooks(db.Model):
