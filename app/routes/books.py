@@ -292,8 +292,6 @@ def get_featured_books():
                 "book_image": book.get("book_image"),
                 "google_books_id": f"isbn_{book.get('primary_isbn13')}",
                 "categories": book.get("categories", []),
-                "retail_price": book.get("price", {}).get("amount", 0.0),
-                "currency_code": book.get("price", {}).get("currencyCode", "USD"),
             } for book in list_obj.get("books", [])
         ])
 
